@@ -1,0 +1,207 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: suited-landing-zone
+spec:
+  resources:
+    - name: namespace
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha1
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: Namespace
+          providerConfigRef:
+            name: kubernetes-default
+      patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+    - name: secret-store-role
+      base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: Role
+        spec:
+          forProvider:
+            description: Role allowing providing access to secrets to the namespace SecretStore
+          providerConfigRef:
+            name: default
+      patches:
+        # Make sure we have a deterministic and self explanatory resource name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-secretstore"
+          toFieldPath: metadata.name
+        # Template the policy with the proper namespace name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: |-
+                {
+                  "Version": "2012-10-17",
+                  "Statement": [{
+                		"Effect": "Allow",
+                		"Principal": {
+                			"Federated": "arn:aws:iam::018768896212:oidc-provider/oidc.eks.us-east-2.amazonaws.com/id/72B77A3FAB2A1F564DF83799A48E0A0C"
+                		},
+                		"Action": "sts:AssumeRoleWithWebIdentity",
+                		"Condition": {
+                			"StringEquals": {
+                				"oidc.eks.us-east-2.amazonaws.com/id/72B77A3FAB2A1F564DF83799A48E0A0C:aud": "sts.amazonaws.com",
+                				"oidc.eks.us-east-2.amazonaws.com/id/72B77A3FAB2A1F564DF83799A48E0A0C:sub": "system:serviceaccount:%s:external-secrets-sa"
+                			}
+                		}
+                	}]
+                }
+          toFieldPath: spec.forProvider.assumeRolePolicy
+    - name: secret-store-iam-role-policy
+      base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: Policy
+        spec:
+          providerConfigRef:
+            name: default
+      patches:
+        # Make sure we have a deterministic and self explanatory resource name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-secretstore-secretsmanager-policy"
+          toFieldPath: spec.forProvider.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-secretstore-secretsmanager-policy"
+          toFieldPath: metadata.name
+        # Template the policy with the project name as a way to scope the secrets that can be accessed
+        # The SecretStore will only be able to access secret with "projects/<project-name>" prefix in their name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: |-
+                {
+                	"Version": "2012-10-17",
+                	"Statement": [{
+                		"Effect": "Allow",
+                		"Action": [
+                			"secretsmanager:GetResourcePolicy",
+                			"secretsmanager:GetSecretValue",
+                			"secretsmanager:DescribeSecret",
+                			"secretsmanager:ListSecretVersionIds",
+                      "secretsmanager:ListSecrets"
+                		],
+                		"Resource": [
+                			"arn:aws:secretsmanager:us-east-2:018768896212:secret:projects/%s/*"
+                		]
+                	}]
+                }
+          toFieldPath: spec.forProvider.policy
+    - name: secret-store-iam-role-policy-attachment
+      base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: RolePolicyAttachment
+        spec:
+          providerConfigRef:
+            name: default
+      patches:
+        # Make sure we have a deterministic and self explanatory resource name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-secretstore"
+          toFieldPath: metadata.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-secretstore"
+          toFieldPath: spec.forProvider.role
+        # Recompose the policy arn
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "arn:aws:iam::018768896212:policy/%s-secretstore-secretsmanager-policy"
+          toFieldPath: spec.forProvider.policyArn
+    - name: secret-store-sa
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha1
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: v1
+              kind: ServiceAccount
+              metadata:
+                name: external-secrets-sa
+          providerConfigRef:
+            name: kubernetes-default
+      patches:
+        # Make sure we have a deterministic and self explanatory resource name
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+        # Recompose the Role Arn
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "arn:aws:iam::018768896212:role/%s-secretstore"
+          toFieldPath: spec.forProvider.manifest.metadata.annotations[eks.amazonaws.com/role-arn]
+    - name: secret-store
+      base:
+        apiVersion: kubernetes.crossplane.io/v1alpha1
+        kind: Object
+        spec:
+          forProvider:
+            manifest:
+              apiVersion: external-secrets.io/v1beta1
+              kind: SecretStore
+              metadata:
+                name: secretstore-aws
+              spec:
+                provider:
+                  aws:
+                    auth:
+                      jwt:
+                        serviceAccountRef:
+                          name: external-secrets-sa
+                    region: us-east-2
+                    service: SecretsManager
+          providerConfigRef:
+            name: kubernetes-default
+      patches:
+        # Make sure we have a deterministic and self explanatory resource name
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+  compositeTypeRef:
+    apiVersion: platform.suited.sh/v1alpha1
+    kind: LandingZone
