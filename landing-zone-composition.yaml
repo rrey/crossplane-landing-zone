@@ -324,6 +324,103 @@ spec:
             string:
               fmt: "arn:aws:iam::018768896212:policy/%s-registry-cicd-policy"
           toFieldPath: spec.forProvider.policyArn
+    - name: iam-group
+      base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: Group
+        spec:
+          forProvider:
+            path: "/"
+          providerConfigRef:
+            name: default
+      patches:
+        # Make sure we have a deterministic and self explanatory resource name
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: metadata.name
+    - name: registry-iam-group-policy
+      base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: Policy
+        spec:
+          providerConfigRef:
+            name: default
+      patches:
+        # Make sure we have a deterministic and self explanatory resource name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-registry-iam-group-policy"
+          toFieldPath: spec.forProvider.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-registry-iam-group"
+          toFieldPath: metadata.name
+        # Template the policy with the project name as a way to scope the ecr repositories that can be accessed
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: |-
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Action": [
+                          "ecr:BatchGetImage",
+                          "ecr:BatchCheckLayerAvailability",
+                          "ecr:GetDownloadUrlForLayer"
+                        ],
+                        "Resource": [
+                            "arn:aws:ecr:us-west-2:111122223333:repository/%s/*"
+                        ]
+                    }, {
+                        "Effect": "Allow",
+                        "Action": [
+                          "ecr:GetAuthorizationToken"
+                        ],
+                        "Resource": "*"
+                    }]
+                }
+          toFieldPath: spec.forProvider.policy
+    - name: registry-iam-group-policy-attachment
+      base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: GroupPolicyAttachment
+        spec:
+          providerConfigRef:
+            name: default
+      patches:
+        # Make sure we have a deterministic and self explanatory resource name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-registry-iam-group"
+          toFieldPath: metadata.name
+        - type: FromCompositeFieldPath
+          fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.group
+        # Recompose the policy arn
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "arn:aws:iam::018768896212:policy/%s-registry-iam-group"
+          toFieldPath: spec.forProvider.policyArn
   compositeTypeRef:
     apiVersion: platform.suited.sh/v1alpha1
     kind: LandingZone
