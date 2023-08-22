@@ -215,7 +215,7 @@ spec:
                   "Statement": [{
                         "Effect": "Allow",
                         "Principal": {
-                            "AWS": "arn:aws:iam::018768896212:user/rrey"
+                            "AWS": "arn:aws:iam::018768896212:user/test-user"
                         },
                         "Action": "sts:AssumeRole"
                     }]
@@ -276,10 +276,11 @@ spec:
                           "ecr:GetDownloadUrlForLayer",
                           "ecr:InitiateLayerUpload",
                           "ecr:PutImage",
-                          "ecr:UploadLayerPart"
+                          "ecr:UploadLayerPart",
+                          "ecr:CreateRepository"
                         ],
                         "Resource": [
-                            "arn:aws:ecr:us-west-2:111122223333:repository/%s/*"
+                            "arn:aws:ecr:eu-west-2:018768896212:repository/%s/*"
                         ]
                     }, {
                         "Effect": "Allow",
@@ -381,7 +382,7 @@ spec:
                           "ecr:GetDownloadUrlForLayer"
                         ],
                         "Resource": [
-                            "arn:aws:ecr:us-west-2:111122223333:repository/%s/*"
+                            "arn:aws:ecr:eu-west-2:018768896212:repository/%s/*"
                         ]
                     }, {
                         "Effect": "Allow",
