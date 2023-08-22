@@ -25,6 +25,3 @@ spec:
             #   - projectName
     served: true
     referenceable: true
-  claimNames:
-    kind: LandingZoneClaim
-    plural: landingzoneclaim
