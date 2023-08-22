@@ -49,18 +49,18 @@ spec:
                 {
                   "Version": "2012-10-17",
                   "Statement": [{
-                		"Effect": "Allow",
-                		"Principal": {
-                			"Federated": "arn:aws:iam::018768896212:oidc-provider/oidc.eks.us-east-2.amazonaws.com/id/72B77A3FAB2A1F564DF83799A48E0A0C"
-                		},
-                		"Action": "sts:AssumeRoleWithWebIdentity",
-                		"Condition": {
-                			"StringEquals": {
-                				"oidc.eks.us-east-2.amazonaws.com/id/72B77A3FAB2A1F564DF83799A48E0A0C:aud": "sts.amazonaws.com",
-                				"oidc.eks.us-east-2.amazonaws.com/id/72B77A3FAB2A1F564DF83799A48E0A0C:sub": "system:serviceaccount:%s:external-secrets-sa"
-                			}
-                		}
-                	}]
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Federated": "arn:aws:iam::018768896212:oidc-provider/oidc.eks.us-east-2.amazonaws.com/id/72B77A3FAB2A1F564DF83799A48E0A0C"
+                        },
+                        "Action": "sts:AssumeRoleWithWebIdentity",
+                        "Condition": {
+                            "StringEquals": {
+                                "oidc.eks.us-east-2.amazonaws.com/id/72B77A3FAB2A1F564DF83799A48E0A0C:aud": "sts.amazonaws.com",
+                                "oidc.eks.us-east-2.amazonaws.com/id/72B77A3FAB2A1F564DF83799A48E0A0C:sub": "system:serviceaccount:%s:external-secrets-sa"
+                            }
+                        }
+                    }]
                 }
           toFieldPath: spec.forProvider.assumeRolePolicy
     - name: secret-store-iam-role-policy
@@ -98,20 +98,20 @@ spec:
             string:
               fmt: |-
                 {
-                	"Version": "2012-10-17",
-                	"Statement": [{
-                		"Effect": "Allow",
-                		"Action": [
-                			"secretsmanager:GetResourcePolicy",
-                			"secretsmanager:GetSecretValue",
-                			"secretsmanager:DescribeSecret",
-                			"secretsmanager:ListSecretVersionIds",
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Action": [
+                            "secretsmanager:GetResourcePolicy",
+                            "secretsmanager:GetSecretValue",
+                            "secretsmanager:DescribeSecret",
+                            "secretsmanager:ListSecretVersionIds",
                       "secretsmanager:ListSecrets"
-                		],
-                		"Resource": [
-                			"arn:aws:secretsmanager:us-east-2:018768896212:secret:projects/%s/*"
-                		]
-                	}]
+                        ],
+                        "Resource": [
+                            "arn:aws:secretsmanager:us-east-2:018768896212:secret:projects/%s/*"
+                        ]
+                    }]
                 }
           toFieldPath: spec.forProvider.policy
     - name: secret-store-iam-role-policy-attachment
@@ -202,6 +202,128 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: metadata.name
           toFieldPath: spec.forProvider.manifest.metadata.namespace
+    - name: registry-cicd-role
+      base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: Role
+        spec:
+          forProvider:
+            description: Role for CICD allowing to push and pull images from ECR
+            assumeRolePolicy: |-
+                {
+                  "Version": "2012-10-17",
+                  "Statement": [{
+                        "Effect": "Allow",
+                        "Principal": {
+                            "AWS": "arn:aws:iam::018768896212:user/rrey"
+                        },
+                        "Action": "sts:AssumeRole"
+                    }]
+                }
+          providerConfigRef:
+            name: default
+      patches:
+        # Make sure we have a deterministic and self explanatory resource name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-registry-cicd"
+          toFieldPath: metadata.name
+    - name: registry-cicd-role-policy
+      base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: Policy
+        spec:
+          providerConfigRef:
+            name: default
+      patches:
+        # Make sure we have a deterministic and self explanatory resource name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-registry-cicd-policy"
+          toFieldPath: spec.forProvider.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-registry-cicd-policy"
+          toFieldPath: metadata.name
+        # Template the policy with the project name as a way to scope the ecr repositories that can be accessed
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: |-
+                {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Action": [
+                          "ecr:BatchGetImage",
+                          "ecr:BatchCheckLayerAvailability",
+                          "ecr:CompleteLayerUpload",
+                          "ecr:GetDownloadUrlForLayer",
+                          "ecr:InitiateLayerUpload",
+                          "ecr:PutImage",
+                          "ecr:UploadLayerPart"
+                        ],
+                        "Resource": [
+                            "arn:aws:ecr:us-west-2:111122223333:repository/%s/*"
+                        ]
+                    }, {
+                        "Effect": "Allow",
+                        "Action": [
+                          "ecr:GetAuthorizationToken"
+                        ],
+                        "Resource": "*"
+                    }]
+                }
+          toFieldPath: spec.forProvider.policy
+    - name: registry-cicd-role-policy-attachment
+      base:
+        apiVersion: iam.aws.upbound.io/v1beta1
+        kind: RolePolicyAttachment
+        spec:
+          providerConfigRef:
+            name: default
+      patches:
+        # Make sure we have a deterministic and self explanatory resource name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-registry-cicd-policy"
+          toFieldPath: metadata.name
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-registry-cicd"
+          toFieldPath: spec.forProvider.role
+        # Recompose the policy arn
+        - type: CombineFromComposite
+          combine:
+            variables:
+              - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "arn:aws:iam::018768896212:policy/%s-registry-cicd-policy"
+          toFieldPath: spec.forProvider.policyArn
   compositeTypeRef:
     apiVersion: platform.suited.sh/v1alpha1
     kind: LandingZone
