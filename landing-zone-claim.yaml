@@ -2,7 +2,6 @@
 apiVersion: platform.suited.sh/v1alpha1
 kind: LandingZone
 metadata:
-  name: awesome-project #my-sample-landing-zone
+  name: awesome-project
 spec: 
-  #  projectName: "awesome-project"
   region: eu-west-2

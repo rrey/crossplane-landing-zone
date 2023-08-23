@@ -193,7 +193,7 @@ spec:
                       jwt:
                         serviceAccountRef:
                           name: external-secrets-sa
-                    region: us-east-2
+                    region: ""  # patched
                     service: SecretsManager
           providerConfigRef:
             name: kubernetes-default
@@ -202,6 +202,9 @@ spec:
         - type: FromCompositeFieldPath
           fromFieldPath: metadata.name
           toFieldPath: spec.forProvider.manifest.metadata.namespace
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.region
+          toFieldPath: spec.forProvider.manifest.spec.provider.aws.region
     - name: registry-cicd-role
       base:
         apiVersion: iam.aws.upbound.io/v1beta1
