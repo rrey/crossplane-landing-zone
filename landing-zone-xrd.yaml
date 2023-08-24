@@ -17,11 +17,7 @@ spec:
           spec:
             type: object
             properties:
-              # projectName:
-              #   type: string
               region:
                 type: string
-            # required:
-            #   - projectName
     served: true
     referenceable: true
