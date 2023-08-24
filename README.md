@@ -1,4 +1,5 @@
 # crossplane-landing-zone
+
 A landing zone creation with Crossplane for Platform Engineers
 
 
@@ -23,6 +24,8 @@ $ make install
 ## Deploy the LandingZone Custom Resource
 
 ```
+$ cd landingzone
+
 # Deploy the XRD
 $ kubectl apply -f landing-zone-xrd.yaml
 
